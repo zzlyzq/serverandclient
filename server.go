@@ -14,7 +14,6 @@ import (
     "time"
 )
 
-
 var (
     host     string
     port     int
@@ -22,6 +21,8 @@ var (
     clients  = make(map[int]net.Conn)
     clientID = 0
     mu       sync.Mutex
+    commands = make(map[int][]string) // 命令队列
+    cmdMutex sync.Mutex
 )
 
 func init() {
@@ -133,10 +134,6 @@ func handleCommands() {
     }
 }
 
-
-
-
-
 func listClients() {
     mu.Lock()
     defer mu.Unlock()
@@ -190,6 +187,33 @@ func connectClient(id int) {
             continue
         }
 
+        // 将命令加入队列
+        addCommandsToQueue(id, command)
+
+        // 处理命令队列
+        processCommandQueue(id, writer, connReader, interrupt)
+    }
+}
+
+func addCommandsToQueue(id int, command string) {
+    cmdMutex.Lock()
+    commands[id] = append(commands[id], strings.Split(command, "\n")...)
+    cmdMutex.Unlock()
+}
+
+func processCommandQueue(id int, writer *bufio.Writer, connReader *bufio.Reader, interrupt chan os.Signal) {
+    for {
+        cmdMutex.Lock()
+        if len(commands[id]) == 0 {
+            cmdMutex.Unlock()
+            break
+        }
+
+        command := commands[id][0]
+        commands[id] = commands[id][1:]
+        cmdMutex.Unlock()
+
+        fmt.Printf("发送命令到客户端 %d: %s\n", id, command)
         fmt.Fprintf(writer, "%s\n", command)
         writer.Flush()
 
@@ -200,6 +224,8 @@ func connectClient(id int) {
             defer func() {
                 done <- true
             }()
+            var response strings.Builder
+            started := false
             for {
                 select {
                 case <-interrupted:
@@ -213,10 +239,21 @@ func connectClient(id int) {
                         fmt.Printf("读取客户端响应失败: %v\n> ", err)
                         return
                     }
-                    if strings.TrimSpace(line) == "<EOF>" {
-                        return
+                    line = strings.TrimSpace(line)
+                    if line == "SERVERANDCLIENTSTB" {
+                        started = true
+                        fmt.Printf("从客户端 %d 收到响应开始标记\n", id)
+                        continue
                     }
-                    fmt.Print(line)
+                    if line == "<SERVERANDCLIENTEOF>" {
+                        if started {
+                            fmt.Printf("从客户端 %d 收到完整响应:\n%s", id, response.String())
+                            return
+                        }
+                    }
+                    if started && line != "" {
+                        response.WriteString(line + "\n")  // 确保行尾带有换行符
+                    }
                 }
             }
         }()
