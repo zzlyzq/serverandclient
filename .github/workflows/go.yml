@@ -44,6 +44,8 @@ jobs:
           asset_path: ./server-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_name: server-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload client binary
         uses: actions/upload-release-asset@v1
@@ -52,3 +54,5 @@ jobs:
           asset_path: ./client-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_name: client-${{ matrix.goos }}-${{ matrix.goarch }}
           asset_content_type: application/octet-stream
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
