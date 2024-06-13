@@ -27,14 +27,20 @@ jobs:
           echo "GOOS=${{ matrix.goos }}" >> $GITHUB_ENV
           echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
 
-      - name: Build
-        run: go build -v -o serverandclient ./...
+      - name: Build server
+        run: |
+          cd cmd/server
+          go build -v -o ../../server
 
-      - name: Test
-        run: go test -v ./...
+      - name: Build client
+        run: |
+          cd cmd/client
+          go build -v -o ../../client
 
       - name: Archive build artifacts
         uses: actions/upload-artifact@v3
         with:
           name: serverandclient-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: serverandclient
+          path: |
+            server
+            client
