@@ -24,22 +24,21 @@ import (
     "io/ioutil"
 )
 
-
 var (
-    host string
-    port int
-    help bool
+    clientHost string
+    clientPort int
+    clientHelp bool
 )
 
 func init() {
-    flag.StringVar(&host, "h", "127.0.0.1", "服务端IP地址")
-    flag.IntVar(&port, "p", 4000, "服务端端口")
-    flag.BoolVar(&help, "help", false, "显示帮助信息")
+    flag.StringVar(&clientHost, "h", "127.0.0.1", "服务端IP地址")
+    flag.IntVar(&clientPort, "p", 4000, "服务端端口")
+    flag.BoolVar(&clientHelp, "help", false, "显示帮助信息")
 }
 
 func main() {
     flag.Parse()
-    if help {
+    if clientHelp {
         fmt.Println("客户端帮助信息:")
         fmt.Println("  -h: 服务端IP地址 (默认: 127.0.0.1)")
         fmt.Println("  -p: 服务端端口 (默认: 4000)")
@@ -50,7 +49,7 @@ func main() {
 
     go func() {
         for {
-            conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, port))
+            conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", clientHost, clientPort))
             if err != nil {
                 time.Sleep(3 * time.Second)
                 continue

@@ -9,17 +9,14 @@ import (
     "strconv"
     "strings"
     "sync"
-    "syscall"
-    "os/signal"
     "time"
     "regexp"
 )
 
-
 var (
-    host     string
-    port     int
-    help     bool
+    serverHost     string
+    serverPort     int
+    serverHelp     bool
     clients  = make(map[int]net.Conn)
     clientInfo = make(map[int]string) // 存储客户端信息
     clientID = 0
@@ -29,14 +26,14 @@ var (
 )
 
 func init() {
-    flag.StringVar(&host, "h", "0.0.0.0", "监听的IP地址")
-    flag.IntVar(&port, "p", 4000, "监听的端口")
-    flag.BoolVar(&help, "help", false, "显示帮助信息")
+    flag.StringVar(&serverHost, "h", "0.0.0.0", "监听的IP地址")
+    flag.IntVar(&serverPort, "p", 4000, "监听的端口")
+    flag.BoolVar(&serverHelp, "help", false, "显示帮助信息")
 }
 
 func main() {
     flag.Parse()
-    if help {
+    if serverHelp {
         fmt.Println("服务端帮助信息:")
         fmt.Println("  -h: 监听的IP地址 (默认: 0.0.0.0)")
         fmt.Println("  -p: 监听的端口 (默认: 4000)")
@@ -44,7 +41,7 @@ func main() {
         return
     }
 
-    addr := fmt.Sprintf("%s:%d", host, port)
+    addr := fmt.Sprintf("%s:%d", serverHost, serverPort)
     listener, err := net.Listen("tcp", addr)
     if err != nil {
         fmt.Printf("监听端口失败: %v\n", err)
