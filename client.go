@@ -4,10 +4,10 @@ import (
     "bufio"
     "flag"
     "fmt"
-    //"github.com/shirou/gopsutil/host"
     "github.com/shirou/gopsutil/cpu"
     "github.com/shirou/gopsutil/disk"
     "github.com/shirou/gopsutil/mem"
+    ghwNet "github.com/shirou/gopsutil/net"
     "github.com/jaypipes/ghw"
     "net"
     "os/exec"
@@ -17,6 +17,7 @@ import (
     "io"
     "strconv"
 )
+
 
 var (
     host string
@@ -125,8 +126,11 @@ func getSystemInfo() string {
     cpuDetails := fmt.Sprintf("Model: %s, Physical CPUs: %d, Cores per CPU: %d, Total Cores: %d, Total Threads: %d, Frequency: %.2fGHz",
         cpuInfo[0].ModelName, physicalCPUs, coresPerCPU, totalCores, totalThreads, cpuInfo[0].Mhz/1000)
 
+    // 获取物理网卡的MAC地址信息
+    macAddresses := getMacAddresses()
+
     return fmt.Sprintf(
-        "CPU: %s, Memory: %vMB, Disk: %vGB, Product: Family: %s, Name: %s, Serial Number: %s, UUID: %s, SKU: %s, Vendor: %s, Version: %s, Disk Types: [%s], RAID Info: [%s]",
+        "CPU: %s, Memory: %vMB, Disk: %vGB, Product: Family: %s, Name: %s, Serial Number: %s, UUID: %s, SKU: %s, Vendor: %s, Version: %s, Disk Types: [%s], RAID Info: [%s], MAC Addresses: [%s]",
         cpuDetails,
         memInfo.Total/1024/1024,
         diskInfo.Total/1024/1024/1024,
@@ -138,7 +142,8 @@ func getSystemInfo() string {
         product.Vendor,
         product.Version,
         strings.Join(diskTypes, "; "),
-        raidDetails)
+        raidDetails,
+        strings.Join(macAddresses, "; "))
 }
 
 
@@ -203,6 +208,23 @@ func getRaidInfo() string {
     }
 
     return strings.Join(raidInfo, "; ")
+}
+
+func getMacAddresses() []string {
+    interfaces, err := ghwNet.Interfaces()
+    if err != nil {
+        fmt.Printf("Error getting network interfaces: %v", err)
+    }
+
+    macAddresses := make([]string, 0)
+    for _, iface := range interfaces {
+        if iface.HardwareAddr != "" {
+            macInfo := fmt.Sprintf("Name: %s MAC: %s", iface.Name, iface.HardwareAddr)
+            macAddresses = append(macAddresses, macInfo)
+        }
+    }
+
+    return macAddresses
 }
 
 
