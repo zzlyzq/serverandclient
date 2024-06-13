@@ -18,6 +18,7 @@ import (
     "strconv"
     "text/tabwriter"
     "bytes"
+    "runtime"
 )
 
 
@@ -170,64 +171,79 @@ func getNetworkInterfaces() []string {
 
 // 通过执行系统命令获取 CPU 信息
 func getPhysicalCPUs() (int, error) {
-    out, err := exec.Command("lscpu").Output()
-    if err != nil {
-        return 0, err
-    }
+    if runtime.GOOS == "windows" {
+        // 在 Windows 环境下，假设物理 CPU 数量为逻辑 CPU 数量的一半
+        logicalCPUs := runtime.NumCPU()
+        physicalCPUs := logicalCPUs / 2
+        if physicalCPUs == 0 {
+            physicalCPUs = 1
+        }
+        return physicalCPUs, nil
+    } else {
+        // 在 Linux 环境下，使用 lscpu 命令获取物理 CPU 数量
+        out, err := exec.Command("lscpu").Output()
+        if err != nil {
+            return 0, err
+        }
 
-    lines := strings.Split(string(out), "\n")
-    for _, line := range lines {
-        if strings.Contains(line, "Socket(s):") {
-            parts := strings.Fields(line)
-            if len(parts) >= 2 {
-                return strconv.Atoi(parts[len(parts)-1])
+        lines := strings.Split(string(out), "\n")
+        for _, line := range lines {
+            if strings.Contains(line, "Socket(s):") {
+                parts := strings.Fields(line)
+                if len(parts) >= 2 {
+                    return strconv.Atoi(parts[len(parts)-1])
+                }
             }
         }
+        return 0, fmt.Errorf("failed to find physical CPU count")
     }
-    return 0, fmt.Errorf("failed to find physical CPU count")
 }
 
 
 // 通过执行系统命令获取 RAID 信息
 func getRaidInfo() string {
-    out, err := exec.Command("lshw", "-class", "storage").Output()
-    if err != nil {
-        return fmt.Sprintf("Error getting RAID info: %v", err)
-    }
-
-    lines := strings.Split(string(out), "\n")
-    raidInfo := make([]string, 0)
-    var currentType, description, product, vendor, driver string
-
-    for _, line := range lines {
-        line = strings.TrimSpace(line)
-        if strings.HasPrefix(line, "*-") {
-            if currentType != "" {
-                raidInfo = append(raidInfo, fmt.Sprintf("%s, %s, %s, %s, %s", currentType, description, product, vendor, driver))
-            }
-            currentType = strings.TrimPrefix(line, "*-")
-            description, product, vendor, driver = "", "", "", ""
-        } else if strings.HasPrefix(line, "description:") {
-            description = strings.TrimPrefix(line, "description: ")
-        } else if strings.HasPrefix(line, "product:") {
-            product = strings.TrimPrefix(line, "product: ")
-        } else if strings.HasPrefix(line, "vendor:") {
-            vendor = strings.TrimPrefix(line, "vendor: ")
-        } else if strings.HasPrefix(line, "configuration: driver=") {
-            driver = strings.TrimPrefix(line, "configuration: driver=")
+    if runtime.GOOS == "windows" {
+        return "RAID information not available on Windows"
+    } else {
+        out, err := exec.Command("lshw", "-class", "storage").Output()
+        if err != nil {
+            return fmt.Sprintf("Error getting RAID info: %v", err)
         }
-    }
 
-    // 处理最后一个条目
-    if currentType != "" {
-        raidInfo = append(raidInfo, fmt.Sprintf("%s, %s, %s, %s, %s", currentType, description, product, vendor, driver))
-    }
+        lines := strings.Split(string(out), "\n")
+        raidInfo := make([]string, 0)
+        var currentType, description, product, vendor, driver string
 
-    if len(raidInfo) == 0 {
-        return "No RAID information available"
-    }
+        for _, line := range lines {
+            line = strings.TrimSpace(line)
+            if strings.HasPrefix(line, "*-") {
+                if currentType != "" {
+                    raidInfo = append(raidInfo, fmt.Sprintf("%s, %s, %s, %s, %s", currentType, description, product, vendor, driver))
+                }
+                currentType = strings.TrimPrefix(line, "*-")
+                description, product, vendor, driver = "", "", "", ""
+            } else if strings.HasPrefix(line, "description:") {
+                description = strings.TrimPrefix(line, "description: ")
+            } else if strings.HasPrefix(line, "product:") {
+                product = strings.TrimPrefix(line, "product: ")
+            } else if strings.HasPrefix(line, "vendor:") {
+                vendor = strings.TrimPrefix(line, "vendor: ")
+            } else if strings.HasPrefix(line, "configuration: driver=") {
+                driver = strings.TrimPrefix(line, "configuration: driver=")
+            }
+        }
 
-    return strings.Join(raidInfo, "; ")
+        // 处理最后一个条目
+        if currentType != "" {
+            raidInfo = append(raidInfo, fmt.Sprintf("%s, %s, %s, %s, %s", currentType, description, product, vendor, driver))
+        }
+
+        if len(raidInfo) == 0 {
+            return "No RAID information available"
+        }
+
+        return strings.Join(raidInfo, "; ")
+    }
 }
 
 func getMacAddresses() []string {
