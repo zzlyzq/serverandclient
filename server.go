@@ -206,13 +206,35 @@ func listClients() {
 
     if len(clients) == 0 {
         fmt.Println("当前没有连接的客户端")
+        fmt.Print("> ")
         return
     }
 
     fmt.Println("连接的客户端列表:")
     for id, conn := range clients {
-        fmt.Printf("  客户端 %d: %s, 系统信息: %s\n", id, conn.RemoteAddr(), clientInfo[id])
+        info := clientInfo[id]
+        ip := conn.RemoteAddr().String()
+
+        // 提取需要的字段信息
+        vendor := extractField(info, "Vendor")
+        sku := extractField(info, "SKU")
+        serialNumber := extractField(info, "Serial Number")
+        cpuModel := extractField(info, "Model")
+        physicalCPUs := extractField(info, "Physical CPUs")
+
+        fmt.Printf("  客户端 %d: IP地址: %s, Vendor: %s, SKU: %s, Serial Number: %s, CPU Model: %s, Physical CPUs: %s\n",
+                   id, ip, vendor, sku, serialNumber, cpuModel, physicalCPUs)
     }
+    fmt.Print("> ")
+}
+
+func extractField(info, field string) string {
+    re := regexp.MustCompile(fmt.Sprintf(`%s: ([^|]+)`, field))
+    match := re.FindStringSubmatch(info)
+    if len(match) > 1 {
+        return strings.TrimSpace(match[1])
+    }
+    return "N/A"
 }
 
 func connectClient(id int) {
