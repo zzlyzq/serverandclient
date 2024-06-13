@@ -11,9 +11,9 @@ jobs:
       matrix:
         goos: [linux, windows, darwin] # 需要打包的系统
         goarch: [amd64, arm64] # 需要打包的架构
-#        exclude: # 排除某些平台和架构
-#          - goarch: arm64
-#            goos: windows
+    #        exclude: # 排除某些平台和架构
+    #          - goarch: arm64
+    #            goos: windows
     steps:
       - uses: actions/checkout@v4
 
@@ -30,17 +30,25 @@ jobs:
       - name: Build server
         run: |
           cd cmd/server
-          go build -v -o ../../server
+          go build -v -o ../../server-${{ matrix.goos }}-${{ matrix.goarch }}
 
       - name: Build client
         run: |
           cd cmd/client
-          go build -v -o ../../client
+          go build -v -o ../../client-${{ matrix.goos }}-${{ matrix.goarch }}
 
-      - name: Archive build artifacts
-        uses: actions/upload-artifact@v3
+      - name: Upload server binary
+        uses: actions/upload-release-asset@v1
         with:
-          name: serverandclient-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: |
-            server
-            client
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./server-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_name: server-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload client binary
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./client-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_name: client-${{ matrix.goos }}-${{ matrix.goarch }}
+          asset_content_type: application/octet-stream
