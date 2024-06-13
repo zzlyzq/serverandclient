@@ -103,8 +103,6 @@ func getSystemInfo() string {
         diskTypes = append(diskTypes, diskInfo)
     }
 
-
-
     // 获取 RAID 信息
     raidDetails := getRaidInfo()
 
@@ -127,10 +125,10 @@ func getSystemInfo() string {
         cpuInfo[0].ModelName, physicalCPUs, coresPerCPU, totalCores, totalThreads, cpuInfo[0].Mhz/1000)
 
     // 获取物理网卡的MAC地址信息
-    macAddresses := getMacAddresses()
+    networkInterfaces := getNetworkInterfaces()
 
     return fmt.Sprintf(
-        "CPU: %s, Memory: %vMB, Disk: %vGB, Product: Family: %s, Name: %s, Serial Number: %s, UUID: %s, SKU: %s, Vendor: %s, Version: %s, Disk Types: [%s], RAID Info: [%s], MAC Addresses: [%s]",
+        "CPU: %s, Memory: %vMB, Disk: %vGB, Product: Family: %s, Name: %s, Serial Number: %s, UUID: %s, SKU: %s, Vendor: %s, Version: %s, Disk Types: [%s], RAID Info: [%s], Network Interfaces: [%s]",
         cpuDetails,
         memInfo.Total/1024/1024,
         diskInfo.Total/1024/1024/1024,
@@ -143,8 +141,30 @@ func getSystemInfo() string {
         product.Version,
         strings.Join(diskTypes, "; "),
         raidDetails,
-        strings.Join(macAddresses, "; "))
+        strings.Join(networkInterfaces, "; "))
 }
+
+func getNetworkInterfaces() []string {
+    interfaces, err := ghwNet.Interfaces()
+    if err != nil {
+        fmt.Printf("Error getting network interfaces: %v", err)
+    }
+
+    networkInfo := make([]string, 0)
+    for _, iface := range interfaces {
+        if iface.HardwareAddr != "" {
+            ipAddresses := make([]string, 0)
+            for _, addr := range iface.Addrs {
+                ipAddresses = append(ipAddresses, addr.Addr)
+            }
+            netInfo := fmt.Sprintf("Name: %s MAC: %s IPs: [%s]", iface.Name, iface.HardwareAddr, strings.Join(ipAddresses, " "))
+            networkInfo = append(networkInfo, netInfo)
+        }
+    }
+
+    return networkInfo
+}
+
 
 
 
