@@ -15,8 +15,10 @@ jobs:
 #          - goarch: arm64
 #            goos: windows
     steps:
-      - uses: actions/checkout
-      - uses: zzlyzq/serverandclient
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }} # 一个默认的变量，用来实现往 Release 中添加文件
           goos: ${{ matrix.goos }}
