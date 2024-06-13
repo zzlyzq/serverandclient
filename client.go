@@ -100,7 +100,7 @@ func getSystemInfo() string {
         driveType := disk.DriveType.String()
         size := disk.SizeBytes / 1024 / 1024 / 1024
 
-        diskInfo := fmt.Sprintf("Name: %s\nType: %s\nSize: %dGB", name, driveType, size)
+        diskInfo := fmt.Sprintf("Name: %s | Type: %s | Size: %dGB", name, driveType, size)
         diskTypes = append(diskTypes, diskInfo)
     }
 
@@ -119,7 +119,7 @@ func getSystemInfo() string {
     }
 
     coresPerCPU := totalCores / physicalCPUs
-    cpuDetails := fmt.Sprintf("Model: %s\nPhysical CPUs: %d\nCores per CPU: %d\nTotal Cores: %d\nTotal Threads: %d\nFrequency: %.2fGHz",
+    cpuDetails := fmt.Sprintf("Model: %s | Physical CPUs: %d | Cores per CPU: %d | Total Cores: %d | Total Threads: %d | Frequency: %.2fGHz",
         cpuInfo[0].ModelName, physicalCPUs, coresPerCPU, totalCores, totalThreads, cpuInfo[0].Mhz/1000)
 
     networkInterfaces := getNetworkInterfaces()
@@ -127,15 +127,16 @@ func getSystemInfo() string {
     var buffer bytes.Buffer
     writer := tabwriter.NewWriter(&buffer, 0, 8, 2, ' ', 0)
 
-    fmt.Fprintln(writer, "Category\tDetails")
-    fmt.Fprintf(writer, "CPU\t%s\n", cpuDetails)
-    fmt.Fprintf(writer, "Memory\t%dMB\n", memInfo.Total/1024/1024)
-    fmt.Fprintf(writer, "Disk\t%dGB\n", diskInfo.Total/1024/1024/1024)
-    fmt.Fprintf(writer, "Product\tFamily: %s\nName: %s\nSerial Number: %s\nUUID: %s\nSKU: %s\nVendor: %s\nVersion: %s\n",
+    fmt.Fprintln(writer, "Category | Details")
+    fmt.Fprintln(writer, "---|---")
+    fmt.Fprintf(writer, "CPU | %s\n", cpuDetails)
+    fmt.Fprintf(writer, "Memory | %dMB\n", memInfo.Total/1024/1024)
+    fmt.Fprintf(writer, "Disk | %dGB\n", diskInfo.Total/1024/1024/1024)
+    fmt.Fprintf(writer, "Product | Family: %s | Name: %s | Serial Number: %s | UUID: %s | SKU: %s | Vendor: %s | Version: %s\n",
         product.Family, product.Name, product.SerialNumber, product.UUID, product.SKU, product.Vendor, product.Version)
-    fmt.Fprintf(writer, "Disk Types\t%s\n", strings.Join(diskTypes, "\n\t"))
-    fmt.Fprintf(writer, "RAID Info\t%s\n", raidDetails)
-    fmt.Fprintf(writer, "Network Interfaces\t%s\n", strings.Join(networkInterfaces, "\n\t"))
+    fmt.Fprintf(writer, "Disk Types | %s\n", strings.Join(diskTypes, "\n"))
+    fmt.Fprintf(writer, "RAID Info | %s\n", raidDetails)
+    fmt.Fprintf(writer, "Network Interfaces | %s\n", strings.Join(networkInterfaces, "\n"))
 
     writer.Flush()
     return buffer.String()

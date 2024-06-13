@@ -129,26 +129,28 @@ func receiveClientInfo(id int, conn net.Conn) {
     }
 }
 
-
 func displayClientInfo(id int, addr string, info string) {
     fmt.Printf("收到客户端 %d 系统信息:\n", id)
     fmt.Printf("  IP地址和端口: %s\n", addr)
+    fmt.Println("系统信息:")
 
     // 逐行打印系统信息
     lines := strings.Split(info, "\n")
     for _, line := range lines {
         if strings.TrimSpace(line) != "" {
-            fmt.Printf("  %s\n", line)
+            fmt.Println(line)
         }
     }
-    fmt.Print("> ")
+    fmt.Print("\n> ")
 }
+
+
 
 func handleCommands() {
     reader := bufio.NewReader(os.Stdin)
 
     for {
-        fmt.Print("> ")
+        fmt.Print("\n> ")
         command, err := reader.ReadString('\n')
         if err != nil {
             fmt.Printf("读取命令失败: %v\n", err)
@@ -265,6 +267,7 @@ func searchClients(keyword string) {
 
     if len(clients) == 0 {
         fmt.Println("当前没有连接的客户端")
+        fmt.Print("> ")  // 确保搜索结束后有提示符
         return
     }
 
@@ -272,7 +275,7 @@ func searchClients(keyword string) {
     found := false
     for id, info := range clientInfo {
         if strings.Contains(strings.ToLower(info), keyword) {
-            if (!found) {
+            if !found {
                 fmt.Println("搜索结果:")
                 found = true
             }
@@ -281,10 +284,13 @@ func searchClients(keyword string) {
         }
     }
 
-    if (!found) {
+    if !found {
         fmt.Println("没有找到匹配的客户端信息")
     }
+
+    // fmt.Print("\n> ")  // 确保搜索结束后有提示符
 }
+
 
 func highlightKeyword(text, keyword string) string {
     re := regexp.MustCompile("(?i)" + keyword)
