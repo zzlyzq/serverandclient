@@ -12,6 +12,7 @@ import (
     "syscall"
     "os/signal"
     "time"
+    "regexp"
 )
 
 
@@ -101,6 +102,8 @@ func acceptConnections(listener net.Listener) {
 
 func receiveClientInfo(id int, conn net.Conn) {
     reader := bufio.NewReader(conn)
+    var infoBuilder strings.Builder
+
     for {
         info, err := reader.ReadString('\n')
         if err != nil {
@@ -111,34 +114,33 @@ func receiveClientInfo(id int, conn net.Conn) {
             fmt.Printf("客户端 %d (%s) 已断开连接\n> ", id, conn.RemoteAddr())
             return
         }
-        if strings.HasPrefix(info, "SYSTEM_INFO: ") {
-            clientInfo[id] = strings.TrimPrefix(info, "SYSTEM_INFO: ")
+
+        if strings.HasPrefix(info, "SYSTEM_INFO:") {
+            continue // 跳过SYSTEM_INFO: 这行
+        }
+
+        infoBuilder.WriteString(info)
+
+        if strings.TrimSpace(info) == "" { // 如果读取到空行，则认为信息读取完毕
+            clientInfo[id] = infoBuilder.String()
             displayClientInfo(id, conn.RemoteAddr().String(), clientInfo[id])
             return
         }
     }
 }
 
+
 func displayClientInfo(id int, addr string, info string) {
     fmt.Printf("收到客户端 %d 系统信息:\n", id)
     fmt.Printf("  IP地址和端口: %s\n", addr)
 
-    // 处理多行字符串
-    fields := strings.Split(info, ", ")
-    var currentField string
-    for _, field := range fields {
-        if currentField == "" {
-            currentField = field
-        } else {
-            if strings.Contains(field, ":") {
-                fmt.Printf("  %s\n", currentField)
-                currentField = field
-            } else {
-                currentField += ", " + field
-            }
+    // 逐行打印系统信息
+    lines := strings.Split(info, "\n")
+    for _, line := range lines {
+        if strings.TrimSpace(line) != "" {
+            fmt.Printf("  %s\n", line)
         }
     }
-    fmt.Printf("  %s\n", currentField) // 打印最后一个字段
     fmt.Print("> ")
 }
 
@@ -270,18 +272,29 @@ func searchClients(keyword string) {
     found := false
     for id, info := range clientInfo {
         if strings.Contains(strings.ToLower(info), keyword) {
-            if !found {
+            if (!found) {
                 fmt.Println("搜索结果:")
                 found = true
             }
-            displayClientInfo(id, clients[id].RemoteAddr().String(), info)
+            highlightedInfo := highlightKeyword(info, keyword)
+            displayClientInfo(id, clients[id].RemoteAddr().String(), highlightedInfo)
         }
     }
 
-    if !found {
+    if (!found) {
         fmt.Println("没有找到匹配的客户端信息")
     }
 }
+
+func highlightKeyword(text, keyword string) string {
+    re := regexp.MustCompile("(?i)" + keyword)
+    highlighted := re.ReplaceAllStringFunc(text, func(match string) string {
+        return "\033[31m" + match + "\033[0m" // 红色高亮
+    })
+    return highlighted
+}
+
+
 
 
 

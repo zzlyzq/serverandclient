@@ -16,6 +16,8 @@ import (
     "sync"
     "io"
     "strconv"
+    "text/tabwriter"
+    "bytes"
 )
 
 
@@ -69,7 +71,7 @@ func main() {
 func sendSystemInfo(conn net.Conn) {
     writer := bufio.NewWriter(conn)
     systemInfo := getSystemInfo()
-    fmt.Fprintf(writer, "SYSTEM_INFO: %s\n", systemInfo)
+    fmt.Fprintf(writer, "SYSTEM_INFO:\n%s\n", systemInfo)
     writer.Flush()
 }
 
@@ -82,7 +84,6 @@ func getSystemInfo() string {
         fmt.Printf("Error getting product info: %v", err)
     }
 
-    // 获取磁盘驱动器类型
     blockInfo, err := ghw.Block()
     if err != nil {
         fmt.Printf("Error getting block device info: %v", err)
@@ -99,50 +100,48 @@ func getSystemInfo() string {
         driveType := disk.DriveType.String()
         size := disk.SizeBytes / 1024 / 1024 / 1024
 
-        diskInfo := fmt.Sprintf("Name: %s Type: %s Size: %dGB", name, driveType, size)
+        diskInfo := fmt.Sprintf("Name: %s\nType: %s\nSize: %dGB", name, driveType, size)
         diskTypes = append(diskTypes, diskInfo)
     }
 
-    // 获取 RAID 信息
     raidDetails := getRaidInfo()
 
-    // 获取物理 CPU 数量
     physicalCPUs, err := getPhysicalCPUs()
     if err != nil {
         fmt.Printf("Error getting physical CPU count: %v", err)
     }
 
-    // 获取 CPU 详细信息
     totalCores := 0
-    totalThreads := len(cpuInfo) // Assuming hyper-threading, this should be the total number of threads
+    totalThreads := len(cpuInfo)
 
     for _, ci := range cpuInfo {
         totalCores += int(ci.Cores)
     }
 
     coresPerCPU := totalCores / physicalCPUs
-    cpuDetails := fmt.Sprintf("Model: %s, Physical CPUs: %d, Cores per CPU: %d, Total Cores: %d, Total Threads: %d, Frequency: %.2fGHz",
+    cpuDetails := fmt.Sprintf("Model: %s\nPhysical CPUs: %d\nCores per CPU: %d\nTotal Cores: %d\nTotal Threads: %d\nFrequency: %.2fGHz",
         cpuInfo[0].ModelName, physicalCPUs, coresPerCPU, totalCores, totalThreads, cpuInfo[0].Mhz/1000)
 
-    // 获取物理网卡的MAC地址信息
     networkInterfaces := getNetworkInterfaces()
 
-    return fmt.Sprintf(
-        "CPU: %s, Memory: %vMB, Disk: %vGB, Product: Family: %s, Name: %s, Serial Number: %s, UUID: %s, SKU: %s, Vendor: %s, Version: %s, Disk Types: [%s], RAID Info: [%s], Network Interfaces: [%s]",
-        cpuDetails,
-        memInfo.Total/1024/1024,
-        diskInfo.Total/1024/1024/1024,
-        product.Family,
-        product.Name,
-        product.SerialNumber,
-        product.UUID,
-        product.SKU,
-        product.Vendor,
-        product.Version,
-        strings.Join(diskTypes, "; "),
-        raidDetails,
-        strings.Join(networkInterfaces, "; "))
+    var buffer bytes.Buffer
+    writer := tabwriter.NewWriter(&buffer, 0, 8, 2, ' ', 0)
+
+    fmt.Fprintln(writer, "Category\tDetails")
+    fmt.Fprintf(writer, "CPU\t%s\n", cpuDetails)
+    fmt.Fprintf(writer, "Memory\t%dMB\n", memInfo.Total/1024/1024)
+    fmt.Fprintf(writer, "Disk\t%dGB\n", diskInfo.Total/1024/1024/1024)
+    fmt.Fprintf(writer, "Product\tFamily: %s\nName: %s\nSerial Number: %s\nUUID: %s\nSKU: %s\nVendor: %s\nVersion: %s\n",
+        product.Family, product.Name, product.SerialNumber, product.UUID, product.SKU, product.Vendor, product.Version)
+    fmt.Fprintf(writer, "Disk Types\t%s\n", strings.Join(diskTypes, "\n\t"))
+    fmt.Fprintf(writer, "RAID Info\t%s\n", raidDetails)
+    fmt.Fprintf(writer, "Network Interfaces\t%s\n", strings.Join(networkInterfaces, "\n\t"))
+
+    writer.Flush()
+    return buffer.String()
 }
+
+
 
 func getNetworkInterfaces() []string {
     interfaces, err := ghwNet.Interfaces()
