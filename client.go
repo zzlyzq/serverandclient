@@ -19,6 +19,9 @@ import (
     "text/tabwriter"
     "bytes"
     "runtime"
+    "log"
+    "regexp"
+    "io/ioutil"
 )
 
 
@@ -77,66 +80,84 @@ func sendSystemInfo(conn net.Conn) {
 }
 
 func getSystemInfo() string {
-    cpuInfo, _ := cpu.Info()
-    memInfo, _ := mem.VirtualMemory()
-    diskInfo, _ := disk.Usage("/")
-    product, err := ghw.Product()
-    if err != nil {
-        fmt.Printf("Error getting product info: %v", err)
-    }
-
-    blockInfo, err := ghw.Block()
-    if err != nil {
-        fmt.Printf("Error getting block device info: %v", err)
-    }
-    diskTypes := make([]string, 0)
-    for _, disk := range blockInfo.Disks {
-        if strings.HasPrefix(disk.Name, "dm-") {
-            continue
-        }
-        if strings.HasPrefix(disk.Name, "nvme0c0n1") {
-            continue
-        }
-        name := disk.Name
-        driveType := disk.DriveType.String()
-        size := disk.SizeBytes / 1024 / 1024 / 1024
-
-        diskInfo := fmt.Sprintf("Name: %s | Type: %s | Size: %dGB", name, driveType, size)
-        diskTypes = append(diskTypes, diskInfo)
-    }
-
-    raidDetails := getRaidInfo()
-
-    physicalCPUs, err := getPhysicalCPUs()
-    if err != nil {
-        fmt.Printf("Error getting physical CPU count: %v", err)
-    }
-
-    totalCores := 0
-    totalThreads := len(cpuInfo)
-
-    for _, ci := range cpuInfo {
-        totalCores += int(ci.Cores)
-    }
-
-    coresPerCPU := totalCores / physicalCPUs
-    cpuDetails := fmt.Sprintf("Model: %s | Physical CPUs: %d | Cores per CPU: %d | Total Cores: %d | Total Threads: %d | Frequency: %.2fGHz",
-        cpuInfo[0].ModelName, physicalCPUs, coresPerCPU, totalCores, totalThreads, cpuInfo[0].Mhz/1000)
-
-    networkInterfaces := getNetworkInterfaces()
-
     var buffer bytes.Buffer
     writer := tabwriter.NewWriter(&buffer, 0, 8, 2, ' ', 0)
 
-    fmt.Fprintln(writer, "Category | Details")
-    fmt.Fprintln(writer, "---|---")
-    fmt.Fprintf(writer, "CPU | %s\n", cpuDetails)
-    fmt.Fprintf(writer, "Memory | %dMB\n", memInfo.Total/1024/1024)
-    fmt.Fprintf(writer, "Disk | %dGB\n", diskInfo.Total/1024/1024/1024)
-    fmt.Fprintf(writer, "Product | Family: %s | Name: %s | Serial Number: %s | UUID: %s | SKU: %s | Vendor: %s | Version: %s\n",
-        product.Family, product.Name, product.SerialNumber, product.UUID, product.SKU, product.Vendor, product.Version)
-    fmt.Fprintf(writer, "Disk Types | %s\n", strings.Join(diskTypes, "\n"))
+    // 获取 CPU 信息
+    cpuInfo, err := cpu.Info()
+    if err != nil {
+        fmt.Fprintf(writer, "Error getting CPU info: %v\n", err)
+    } else {
+        physicalCPUs := getPhysicalCPUCount()
+        logicalCPUs := runtime.NumCPU()
+        totalCores := 0
+        totalThreads := len(cpuInfo)
+
+        for _, ci := range cpuInfo {
+            totalCores += int(ci.Cores)
+        }
+
+        coresPerCPU := 0
+        if physicalCPUs > 0 {
+            coresPerCPU = totalCores / physicalCPUs
+        }
+
+        cpuDetails := fmt.Sprintf("Model: %s | Physical CPUs: %d | Logical CPUs: %d | Cores per CPU: %d | Total Cores: %d | Total Threads: %d | Frequency: %.2fGHz",
+            cpuInfo[0].ModelName, physicalCPUs, logicalCPUs, coresPerCPU, totalCores, totalThreads, cpuInfo[0].Mhz/1000)
+        fmt.Fprintf(writer, "CPU | %s\n", cpuDetails)
+    }
+
+    // 获取内存信息
+    memInfo, err := mem.VirtualMemory()
+    if err != nil {
+        fmt.Fprintf(writer, "Error getting memory info: %v\n", err)
+    } else {
+        fmt.Fprintf(writer, "Memory | %dMB\n", memInfo.Total/1024/1024)
+    }
+
+    // 获取磁盘信息
+    diskInfo, err := disk.Usage("/")
+    if err != nil {
+        fmt.Fprintf(writer, "Error getting disk info: %v\n", err)
+    } else {
+        fmt.Fprintf(writer, "Disk | %dGB\n", diskInfo.Total/1024/1024/1024)
+    }
+
+    // 获取产品信息
+    product, err := ghw.Product()
+    if err != nil {
+        fmt.Fprintf(writer, "Error getting product info: %v\n", err)
+    } else {
+        fmt.Fprintf(writer, "Product | Family: %s | Name: %s | Serial Number: %s | UUID: %s | SKU: %s | Vendor: %s | Version: %s\n",
+            product.Family, product.Name, product.SerialNumber, product.UUID, product.SKU, product.Vendor, product.Version)
+    }
+
+    // 获取磁盘类型信息
+    blockInfo, err := ghw.Block()
+    if err != nil {
+        fmt.Fprintf(writer, "Error getting block device info: %v\n", err)
+    } else {
+        var diskTypes []string
+        for _, disk := range blockInfo.Disks {
+            if strings.HasPrefix(disk.Name, "dm-") || strings.HasPrefix(disk.Name, "nvme0c0n1") {
+                continue
+            }
+            name := disk.Name
+            driveType := disk.DriveType.String()
+            size := disk.SizeBytes / 1024 / 1024 / 1024
+
+            diskInfo := fmt.Sprintf("Name: %s | Type: %s | Size: %dGB", name, driveType, size)
+            diskTypes = append(diskTypes, diskInfo)
+        }
+        fmt.Fprintf(writer, "Disk Types | %s\n", strings.Join(diskTypes, "\n"))
+    }
+
+    // 获取 RAID 信息
+    raidDetails := getRaidInfo()
     fmt.Fprintf(writer, "RAID Info | %s\n", raidDetails)
+
+    // 获取网络接口信息
+    networkInterfaces := getNetworkInterfaces()
     fmt.Fprintf(writer, "Network Interfaces | %s\n", strings.Join(networkInterfaces, "\n"))
 
     writer.Flush()
@@ -170,33 +191,59 @@ func getNetworkInterfaces() []string {
 
 
 // 通过执行系统命令获取 CPU 信息
-func getPhysicalCPUs() (int, error) {
-    if runtime.GOOS == "windows" {
-        // 在 Windows 环境下，假设物理 CPU 数量为逻辑 CPU 数量的一半
-        logicalCPUs := runtime.NumCPU()
-        physicalCPUs := logicalCPUs / 2
-        if physicalCPUs == 0 {
-            physicalCPUs = 1
-        }
-        return physicalCPUs, nil
-    } else {
-        // 在 Linux 环境下，使用 lscpu 命令获取物理 CPU 数量
-        out, err := exec.Command("lscpu").Output()
+func getPhysicalCPUCount() int {
+    // 检查操作系统类型
+    switch runtime.GOOS {
+    case "windows":
+        // 在 Windows 系统中使用 WMI 查询物理 CPU 数量
+        output, err := exec.Command("wmic", "cpu", "get", "NumberOfCores").Output()
         if err != nil {
-            return 0, err
+            log.Printf("获取物理 CPU 数量失败: %v", err)
+            return 0
         }
-
-        lines := strings.Split(string(out), "\n")
-        for _, line := range lines {
-            if strings.Contains(line, "Socket(s):") {
-                parts := strings.Fields(line)
-                if len(parts) >= 2 {
-                    return strconv.Atoi(parts[len(parts)-1])
-                }
+        // 解析命令输出结果
+        lines := strings.Split(string(output), "\n")
+        if len(lines) >= 2 {
+            count, err := strconv.Atoi(strings.TrimSpace(lines[1]))
+            if err != nil {
+                log.Printf("解析物理 CPU 数量失败: %v", err)
+                return 0
             }
+            return count
         }
-        return 0, fmt.Errorf("failed to find physical CPU count")
+    case "darwin":
+        // 在 macOS 系统中使用 sysctl 命令获取物理 CPU 数量
+        output, err := exec.Command("sysctl", "-n", "hw.physicalcpu").Output()
+        if err != nil {
+            log.Printf("获取物理 CPU 数量失败: %v", err)
+            return 0
+        }
+        count, err := strconv.Atoi(strings.TrimSpace(string(output)))
+        if err != nil {
+            log.Printf("解析物理 CPU 数量失败: %v", err)
+            return 0
+        }
+        return count
+    case "linux":
+        // 在 Linux 系统中读取 /proc/cpuinfo 文件获取物理 CPU 数量
+        output, err := ioutil.ReadFile("/proc/cpuinfo")
+        if err != nil {
+            log.Printf("获取物理 CPU 数量失败: %v", err)
+            return 0
+        }
+        // 使用正则表达式匹配物理 CPU 信息
+        re := regexp.MustCompile(`physical id\s+:\s+(\d+)`)
+        matches := re.FindAllStringSubmatch(string(output), -1)
+        physicalIDs := make(map[string]bool)
+        for _, match := range matches {
+            physicalIDs[match[1]] = true
+        }
+        return len(physicalIDs)
+    default:
+        // 对于其他操作系统,返回逻辑 CPU 数量
+        return runtime.NumCPU()
     }
+    return 0
 }
 
 
