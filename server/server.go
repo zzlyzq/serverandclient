@@ -1,4 +1,4 @@
-package main
+package server
 
 import (
     "bufio"
@@ -33,7 +33,7 @@ func init() {
     flag.BoolVar(&serverHelp, "help", false, "显示帮助信息")
 }
 
-func main() {
+func Run() {
     flag.Parse()
     if serverHelp {
         fmt.Println("服务端帮助信息:")

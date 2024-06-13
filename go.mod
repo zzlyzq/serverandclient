@@ -1,4 +1,4 @@
-module client
+module serverandclient
 
 go 1.21.4
 
