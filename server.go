@@ -256,7 +256,6 @@ func extractField(info, field string) string {
 }
 
 
-// 修改后的listClients函数
 func listClients() {
     mu.Lock()
     defer mu.Unlock()
@@ -282,12 +281,48 @@ func listClients() {
         totalCores := extractField(info, "Total Cores")
         totalThreads := extractField(info, "Total Threads")
 
-        fmt.Printf("  客户端 %d: IP地址: %s, Vendor: %s, SKU: %s, Serial Number: %s, CPU Model: %s, Physical CPUs: %s, Logical CPUs: %s, Total Cores: %s, Total Threads: %s\n",
-                   id, ip, vendor, sku, serialNumber, cpuModel, physicalCPUs, logicalCPUs, totalCores, totalThreads)
+        // 提取内存信息
+        memory := extractMemoryField(info)
+
+        // 提取磁盘信息
+        diskInfo := extractDiskInfo(info)
+
+        fmt.Printf("  客户端 %d: IP地址: %s, Vendor: %s, SKU: %s, Serial Number: %s, CPU Model: %s, Physical CPUs: %s, Logical CPUs: %s, Total Cores: %s, Total Threads: %s, Memory: %s, Disk: %s\n",
+                   id, ip, vendor, sku, serialNumber, cpuModel, physicalCPUs, logicalCPUs, totalCores, totalThreads, memory, diskInfo)
     }
     fmt.Print("> ")
 }
 
+func extractMemoryField(info string) string {
+    re := regexp.MustCompile(`Memory\s*\|\s*(\d+)MB`)
+    match := re.FindStringSubmatch(info)
+    if len(match) > 1 {
+        return strings.TrimSpace(match[1]) + "MB"
+    }
+    return "N/A"
+}
+
+
+func extractDiskInfo(info string) string {
+    re := regexp.MustCompile(`Disk Types \| (.+)`)
+    match := re.FindStringSubmatch(info)
+    if len(match) > 1 {
+        diskTypesStr := strings.TrimSpace(match[1])
+        diskTypes := strings.Split(diskTypesStr, "\n")
+        var diskInfos []string
+        for _, diskType := range diskTypes {
+            fields := strings.Split(diskType, " | ")
+            if len(fields) == 3 {
+                name := strings.TrimPrefix(fields[0], "Name: ")
+                diskType := strings.TrimPrefix(fields[1], "Type: ")
+                size := strings.TrimPrefix(fields[2], "Size: ")
+                diskInfos = append(diskInfos, fmt.Sprintf("%s (%s, %s)", name, diskType, size))
+            }
+        }
+        return strings.Join(diskInfos, ", ")
+    }
+    return ""
+}
 
 func searchClients(keyword string) {
     mu.Lock()
