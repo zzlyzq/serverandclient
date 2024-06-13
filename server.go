@@ -198,45 +198,7 @@ func handleCommands() {
     }
 }
 
-
-
-func listClients() {
-    mu.Lock()
-    defer mu.Unlock()
-
-    if len(clients) == 0 {
-        fmt.Println("当前没有连接的客户端")
-        fmt.Print("> ")
-        return
-    }
-
-    fmt.Println("连接的客户端列表:")
-    for id, conn := range clients {
-        info := clientInfo[id]
-        ip := conn.RemoteAddr().String()
-
-        // 提取需要的字段信息
-        vendor := extractField(info, "Vendor")
-        sku := extractField(info, "SKU")
-        serialNumber := extractField(info, "Serial Number")
-        cpuModel := extractField(info, "Model")
-        physicalCPUs := extractField(info, "Physical CPUs")
-
-        fmt.Printf("  客户端 %d: IP地址: %s, Vendor: %s, SKU: %s, Serial Number: %s, CPU Model: %s, Physical CPUs: %s\n",
-                   id, ip, vendor, sku, serialNumber, cpuModel, physicalCPUs)
-    }
-    fmt.Print("> ")
-}
-
-func extractField(info, field string) string {
-    re := regexp.MustCompile(fmt.Sprintf(`%s: ([^|]+)`, field))
-    match := re.FindStringSubmatch(info)
-    if len(match) > 1 {
-        return strings.TrimSpace(match[1])
-    }
-    return "N/A"
-}
-
+// 增加connectClient函数的定义
 func connectClient(id int) {
     mu.Lock()
     conn, ok := clients[id]
@@ -282,6 +244,50 @@ func connectClient(id int) {
         processCommandQueue(id, writer, connReader, interrupt)
     }
 }
+
+// 增加extractField函数的定义
+func extractField(info, field string) string {
+    re := regexp.MustCompile(fmt.Sprintf(`%s: ([^|]+)`, field))
+    match := re.FindStringSubmatch(info)
+    if len(match) > 1 {
+        return strings.TrimSpace(match[1])
+    }
+    return "N/A"
+}
+
+
+// 修改后的listClients函数
+func listClients() {
+    mu.Lock()
+    defer mu.Unlock()
+
+    if len(clients) == 0 {
+        fmt.Println("当前没有连接的客户端")
+        fmt.Print("> ")
+        return
+    }
+
+    fmt.Println("连接的客户端列表:")
+    for id, conn := range clients {
+        info := clientInfo[id]
+        ip := conn.RemoteAddr().String()
+
+        // 提取需要的字段信息
+        vendor := extractField(info, "Vendor")
+        sku := extractField(info, "SKU")
+        serialNumber := extractField(info, "Serial Number")
+        cpuModel := extractField(info, "Model")
+        physicalCPUs := extractField(info, "Physical CPUs")
+        logicalCPUs := extractField(info, "Logical CPUs")
+        totalCores := extractField(info, "Total Cores")
+        totalThreads := extractField(info, "Total Threads")
+
+        fmt.Printf("  客户端 %d: IP地址: %s, Vendor: %s, SKU: %s, Serial Number: %s, CPU Model: %s, Physical CPUs: %s, Logical CPUs: %s, Total Cores: %s, Total Threads: %s\n",
+                   id, ip, vendor, sku, serialNumber, cpuModel, physicalCPUs, logicalCPUs, totalCores, totalThreads)
+    }
+    fmt.Print("> ")
+}
+
 
 func searchClients(keyword string) {
     mu.Lock()

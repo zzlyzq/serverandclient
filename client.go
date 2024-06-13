@@ -91,7 +91,7 @@ func getSystemInfo() string {
         physicalCPUs := getPhysicalCPUCount()
         logicalCPUs := runtime.NumCPU()
         totalCores := 0
-        totalThreads := len(cpuInfo)
+        totalThreads := logicalCPUs // 修正总线程数的计算
 
         for _, ci := range cpuInfo {
             totalCores += int(ci.Cores)
@@ -166,6 +166,7 @@ func getSystemInfo() string {
 
 
 
+
 func getNetworkInterfaces() []string {
     interfaces, err := ghwNet.Interfaces()
     if err != nil {
@@ -190,27 +191,21 @@ func getNetworkInterfaces() []string {
 
 
 
-// 通过执行系统命令获取 CPU 信息
+// 修改后的getPhysicalCPUCount函数
 func getPhysicalCPUCount() int {
     // 检查操作系统类型
     switch runtime.GOOS {
     case "windows":
         // 在 Windows 系统中使用 WMI 查询物理 CPU 数量
-        output, err := exec.Command("wmic", "cpu", "get", "NumberOfCores").Output()
+        output, err := exec.Command("wmic", "cpu", "get", "NumberOfCores", "/value").Output()
         if err != nil {
             log.Printf("获取物理 CPU 数量失败: %v", err)
             return 0
         }
         // 解析命令输出结果
-        lines := strings.Split(string(output), "\n")
-        if len(lines) >= 2 {
-            count, err := strconv.Atoi(strings.TrimSpace(lines[1]))
-            if err != nil {
-                log.Printf("解析物理 CPU 数量失败: %v", err)
-                return 0
-            }
-            return count
-        }
+        re := regexp.MustCompile(`NumberOfCores=(\d+)`)
+        matches := re.FindAllStringSubmatch(string(output), -1)
+        return len(matches)
     case "darwin":
         // 在 macOS 系统中使用 sysctl 命令获取物理 CPU 数量
         output, err := exec.Command("sysctl", "-n", "hw.physicalcpu").Output()
@@ -245,7 +240,6 @@ func getPhysicalCPUCount() int {
     }
     return 0
 }
-
 
 // 通过执行系统命令获取 RAID 信息
 func getRaidInfo() string {
