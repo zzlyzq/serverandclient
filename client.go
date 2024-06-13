@@ -294,7 +294,13 @@ func executeCommandAndStreamOutput(command string, writer *bufio.Writer) {
     fmt.Fprintf(writer, "SERVERANDCLIENTSTB\n")
     writer.Flush()
 
-    cmd := exec.Command("bash", "-c", command)
+    var cmd *exec.Cmd
+    if runtime.GOOS == "windows" {
+        cmd = exec.Command("cmd.exe", "/c", command)
+    } else {
+        cmd = exec.Command("bash", "-c", command)
+    }
+
     stdout, err := cmd.StdoutPipe()
     if err != nil {
         fmt.Fprintf(writer, "创建StdoutPipe失败: %v\n<SERVERANDCLIENTEOF>\n", err)
