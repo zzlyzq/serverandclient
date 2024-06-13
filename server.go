@@ -11,6 +11,8 @@ import (
     "sync"
     "time"
     "regexp"
+    "os/signal"
+    "syscall"
 )
 
 var (
@@ -56,6 +58,7 @@ func main() {
 
     handleCommands()
 }
+
 
 func sendPingToClients() {
     ticker := time.NewTicker(10 * time.Second)
